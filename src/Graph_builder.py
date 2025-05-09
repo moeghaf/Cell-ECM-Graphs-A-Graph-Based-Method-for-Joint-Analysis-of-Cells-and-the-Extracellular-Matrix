@@ -390,7 +390,7 @@ class GraphBuilder:
             #for text in legend.get_texts():
             #    text.set_fontsize(18) 
             plt.show() 
-            fig.savefig(self.save_folder+'/ECM_patch_clusters.svg', format='svg', bbox_inches='tight', dpi=600)
+            fig.savefig(self.save_folder+'/ECM_patch_clusters.tiff', format='tiff', bbox_inches='tight', dpi=600)
 
     def rename_cluster_labels(self, image, background_label, ceg_dict=None):
         # Create a copy of the image to avoid modifying the original
@@ -475,7 +475,7 @@ class GraphBuilder:
 
             # Save the figure
             fig = ax.get_figure()
-            fig.savefig(self.save_folder+'/ECM_protein_proportions.svg',format='svg', bbox_inches='tight', dpi=600)
+            fig.savefig(self.save_folder+'/ECM_protein_proportions.tiff',format='tiff', bbox_inches='tight', dpi=600)
             
     def get_ecm_patches(self):
         ''' Generates ECM patches '''
@@ -605,7 +605,7 @@ class GraphBuilder:
         )
 
         # Save figure
-        fig.savefig(self.save_folder + '/cell_cell_interactions.svg',format='svg', bbox_inches='tight', dpi=600)
+        fig.savefig(self.save_folder + '/cell_cell_interactions.tiff',format='tiff', bbox_inches='tight', dpi=600)
 
 
         if not self.single:
@@ -616,7 +616,7 @@ class GraphBuilder:
                 legend.remove()
 
             # Save the figure without the legend
-            fig.savefig(self.save_folder + '/cell_cell_interactions_no_legend.svg',format='svg', bbox_inches='tight', dpi=600)
+            fig.savefig(self.save_folder + '/cell_cell_interactions_no_legend.tiff',format='tiff', bbox_inches='tight', dpi=600)
             plt.close(fig)
 
     def set_up_colors(self):
@@ -730,7 +730,7 @@ class GraphBuilder:
         )        
 
         # Save the figure
-        fig.savefig(self.save_folder + '/ecm_ecm_interactions.svg', format='svg', bbox_inches='tight', dpi=600)
+        fig.savefig(self.save_folder + '/ecm_ecm_interactions.tiff', format='tiff', bbox_inches='tight', dpi=600)
 
         if not self.single:
             # Remove legend properly
@@ -739,7 +739,7 @@ class GraphBuilder:
                 legend.remove()
             
             # Save the figure without the legend
-            fig.savefig(self.save_folder + '/ecm_ecm_interactions_no_legend.svg',format='svg', bbox_inches='tight', dpi=600)
+            fig.savefig(self.save_folder + '/ecm_ecm_interactions_no_legend.tiff',format='tiff', bbox_inches='tight', dpi=600)
             plt.close(fig)
 
     def visualize_cell_ecm_interactions(self):
@@ -819,7 +819,7 @@ class GraphBuilder:
             columnspacing=1.0,  # Adjust spacing between columns
             labelspacing=1.2  # Adjust spacing between rows
         )        
-        fig.savefig(self.save_folder + '/cell_ecm_interactions.svg',format='svg', bbox_inches='tight', dpi=600)
+        fig.savefig(self.save_folder + '/cell_ecm_interactions.tiff',format='tiff', bbox_inches='tight', dpi=600)
 
         if not self.single:
             # Remove legend 
@@ -828,7 +828,7 @@ class GraphBuilder:
                 legend.remove()
             
             # Save the figure without the legend
-            fig.savefig(self.save_folder + '/cell_ecm_interactions_no_legend.svg',format='svg', bbox_inches='tight', dpi=600)
+            fig.savefig(self.save_folder + '/cell_ecm_interactions_no_legend.tiff',format='tiff', bbox_inches='tight', dpi=600)
             plt.close(fig)
 
     def visualize_cell_ecm_graph(self):
@@ -918,7 +918,7 @@ class GraphBuilder:
             columnspacing=1.0,  
             labelspacing=1.2  
         )        
-        fig.savefig(self.save_folder + '/cell_ecm_graph.svg',format='svg', bbox_inches='tight', dpi=600)
+        fig.savefig(self.save_folder + '/cell_ecm_graph.tiff',format='tiff', bbox_inches='tight', dpi=600)
 
         if not self.single:
             # Remove legend 
@@ -927,7 +927,7 @@ class GraphBuilder:
                 legend.remove()
             
             # Save the figure without the legend
-            fig.savefig(self.save_folder + '/cell_ecm_graph_no_legend.svg', format='svg', bbox_inches='tight', dpi=600)
+            fig.savefig(self.save_folder + '/cell_ecm_graph_no_legend.tiff', format='tiff', bbox_inches='tight', dpi=600)
             plt.close(fig)
 
     def get_pygeo_data(self, y, g_type):
