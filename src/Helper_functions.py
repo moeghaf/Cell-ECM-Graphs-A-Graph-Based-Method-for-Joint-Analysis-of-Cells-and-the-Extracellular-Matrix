@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import dill
+
 
 def plot_36_images(images, titles=None, cmap='jet', figsize=(10, 10), save_path=None):
     
@@ -17,3 +19,13 @@ def plot_36_images(images, titles=None, cmap='jet', figsize=(10, 10), save_path=
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight', pad_inches=0.05)
     plt.show()
+
+
+
+# Load the CellECMGraph object saved from Figure S1 notebook
+def load_ceg(savename):
+    """
+    Load the CellECMGraph object from a file using dill.
+    """
+    with open(savename, "rb") as f:
+        return dill.load(f)
