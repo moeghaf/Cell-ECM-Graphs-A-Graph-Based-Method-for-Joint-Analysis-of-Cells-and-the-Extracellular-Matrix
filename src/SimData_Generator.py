@@ -10,6 +10,7 @@ import os
 from scipy.spatial import Delaunay
 from tifffile import imread, imwrite
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.lines import Line2D
 
 class imc_ecm_data_generator:
     def __init__(self, img_size, n_points, save_location= False):
@@ -97,7 +98,8 @@ class imc_ecm_data_generator:
         self.cells_C_centroids = cells_C_D[:50]
         self.cells_D_centroids = cells_C_D[50:]
         return 
-    
+        
+
     def visualize_cells_on_ecm(self, radius=2):
         # Generate a color palette using seaborn
         palette = sns.color_palette("hls", 4)
@@ -110,20 +112,36 @@ class imc_ecm_data_generator:
         # Draw circles for each cell type
         for x, y in self.cells_A_centroids:
             ax.add_patch(plt.Circle((x, y), radius, color=colors[0], fill=True, alpha=0.7))
-
         for x, y in self.cells_B_centroids:
             ax.add_patch(plt.Circle((x, y), radius, color=colors[1], fill=True, alpha=0.7))
-
         for x, y in self.cells_C_centroids:
             ax.add_patch(plt.Circle((x, y), radius, color=colors[2], fill=True, alpha=0.7))
-
         for x, y in self.cells_D_centroids:
             ax.add_patch(plt.Circle((x, y), radius, color=colors[3], fill=True, alpha=0.7))
 
+        # Add legend on the right side
+        legend_labels = ['Cell Type A', 'Cell Type B', 'Cell Type C', 'Cell Type D']
+        legend_handles = [
+            Line2D([0], [0], marker='o', color='w', label=label,
+                markerfacecolor=color, markeredgecolor='black',
+                markersize=12, markeredgewidth=1.5)
+            for label, color in zip(legend_labels, colors)
+        ]
+        ax.legend(
+            handles=legend_handles,
+            loc='center left',
+            bbox_to_anchor=(1.02, 0.5),
+            fontsize=16,
+            frameon=False
+        )
+
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.set_title("Simulated ECM with Cell Types")
-        plt.savefig('cells_on_ecm.pdf')
+        ax.set_title("Simulated ECM with Cell Types", fontsize=18)
+
+        plt.tight_layout()
+        plt.savefig('cells_on_ecm.pdf', bbox_inches='tight')  # Ensures legend isn't cut off
+
 
     def save_cell_data(self, savename, immune=False):
         '''Save cell data - cell type and centroids for cell-ECM graph'''
@@ -191,14 +209,21 @@ class imc_ecm_data_generator:
         self.imc_ecm_channels = ecm_markers
 
 
-    def visualize_ecm_imc_markers(self):
+    def save_imc_data(self, savename):
+        ''' Save IMC ECM channels for Cell-ECM graphs '''
+                
+        imc_ecm_channels_rs = self.imc_ecm_channels.transpose(2,0,1)
+        imwrite(self.save_location+'/imc_data/sim_imc_ecm_'+str(savename)+'.tiff',imc_ecm_channels_rs)
+
+
+    def visualize_ecm_imc_markers(self, savename):
         # Create custom colormaps
         black_yellow = LinearSegmentedColormap.from_list("black_yellow", [(0, 0, 0), (1, 1, 0)])
         black_red = LinearSegmentedColormap.from_list("black_red", [(0, 0, 0), (1, 0, 0)])
         black_green = LinearSegmentedColormap.from_list("black_green", [(0, 0, 0), (0, 1, 0)])
         black_blue = LinearSegmentedColormap.from_list("black_blue", [(0, 0, 0), (0, 0, 1)])
 
-        fig, ax = plt.subplots(1, 3, figsize=(12, 4), dpi=600)
+        fig, ax = plt.subplots(1, 3, figsize=(12, 4), dpi=300)
         
         # Show the images and remove axes
         im0 = ax[0].imshow(self.imc_ecm_channels[:, :, 0], cmap=black_red)
@@ -207,18 +232,63 @@ class imc_ecm_data_generator:
         ax[1].axis('off')
         im2 = ax[2].imshow(self.imc_ecm_channels[:, :, 2], cmap=black_blue)
         ax[2].axis('off')
-        
+
         # Add color bars
         fig.colorbar(im0, ax=ax[0], orientation='vertical', fraction=0.046, pad=0.04)
         fig.colorbar(im1, ax=ax[1], orientation='vertical', fraction=0.046, pad=0.04)
         fig.colorbar(im2, ax=ax[2], orientation='vertical', fraction=0.046, pad=0.04)
         
         plt.tight_layout()
-        plt.show()
+        plt.savefig(savename + '.pdf')
 
-    def save_imc_data(self, savename):
-        ''' Save IMC ECM channels for Cell-ECM graphs '''
-                
-        imc_ecm_channels_rs = self.imc_ecm_channels.transpose(2,0,1)
-        imwrite(self.save_location+'/imc_data/sim_imc_ecm_'+str(savename)+'.tiff',imc_ecm_channels_rs)
-     
+
+def plot_cell_type_distribution(ceg):
+    """
+    Plot the distribution of cell types in the cell graph.
+    
+    Parameters:
+    ceg (Cell_ECM_Graphs): The Cell_ECM_Graphs object containing the cell graph data.
+    """
+
+        
+    # Count unique types of cell_type nodes in the cell graph
+    cell_nodes = [(n, attr) for n, attr in ceg.ceg_dict[0].cell_G.nodes(data=True) if 'cell' in n]
+    cell_types = [attr['cell_type'] for n, attr in cell_nodes]
+
+    # Count cell types
+    cell_type_counts = pd.Series(cell_types).value_counts()
+
+    # Get color mapping from the visualization function
+    color_map = ceg.ceg_dict[0].color_map  # Assumes this attribute exists and is used in the plot
+
+    # Prepare colors in the same order as the pie chart labels
+    colors = [color_map[ct] for ct in cell_type_counts.index]
+
+    # Plot pie chart
+    fig, ax = plt.subplots(figsize=(8, 8))
+    wedges, texts = ax.pie(
+        cell_type_counts, 
+        labels=None,  # No labels directly on the pie chart
+        colors=colors, 
+        startangle=90, 
+        wedgeprops={'edgecolor': 'black'}  # Add black outline to wedges
+    )
+
+    # Add legend with percentages and counts
+    legend_labels = [
+        f"{cell_type} (N={count}, {count / cell_type_counts.sum() * 100:.1f}%)"
+        for cell_type, count in zip(cell_type_counts.index, cell_type_counts.values)
+    ]
+    ax.legend(
+        wedges, 
+        legend_labels, 
+        title="Cell Types", 
+        loc="center left", 
+        bbox_to_anchor=(1, 0, 0.5, 1), 
+        fontsize=18  # Increased legend text size
+    )
+
+    # Set title and aspect
+    plt.axis('equal')  # Equal aspect ratio ensures the pie chart is circular
+    plt.tight_layout()
+    plt.show()
