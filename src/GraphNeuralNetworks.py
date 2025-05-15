@@ -111,15 +111,34 @@ import numpy as np
 import torch
 
 
-def train(model, optimizer, train_loader, device, class_weights=None):
+def train(model, optimizer, train_loader, device, class_weights=None, edge_dropout_prob=0.2):
+    """
+    Train the GNN model with optional random edge dropout for data augmentation.
+
+    Parameters:
+    - model (torch.nn.Module): The GNN model to train.
+    - optimizer (torch.optim.Optimizer): Optimizer for training.
+    - train_loader (DataLoader): DataLoader for training data.
+    - device (str): Device to run the model on ('cpu' or 'cuda').
+    - class_weights (torch.Tensor, optional): Class weights for weighted loss.
+    - edge_dropout_prob (float, optional): Probability of dropping edges for data augmentation.
+
+    Returns:
+    - float: Average training loss.
+    """
     model.train()
     total_loss = 0
 
     if class_weights is not None:
-        class_weights = class_weights.to(device)  # Make sure weights are on the same device
+        class_weights = class_weights.to(device)  # Ensure weights are on the same device
 
     for data in train_loader:
         data = data.to(device)
+
+        # Apply random edge dropout
+        edge_mask = torch.rand(data.edge_index.shape[1]) > edge_dropout_prob
+        data.edge_index = data.edge_index[:, edge_mask]
+
         optimizer.zero_grad()
         out = model(data.x, data.edge_index, data.batch)
         loss = F.nll_loss(out, data.y[0], weight=class_weights)  # Weighted loss
@@ -157,7 +176,7 @@ def plot_losses(train_losses, val_losses, val_accuracies):
     plt.legend()
 
     plt.tight_layout()
-    plt.savefig("train_val_loss.pdf", bbox_inches="tight")
+    plt.savefig("train_val_loss.tiff", bbox_inches="tight")
     
     return 
 
@@ -284,38 +303,87 @@ def pyg_to_networkx(data: Data) -> nx.Graph:
             G.add_edge(src, dst)
 
     return G
+import torch
+import numpy as np
+from captum.attr import IntegratedGradients, Saliency
+from collections import defaultdict
 
+def model_forward(edge_mask, data, model, device):
+    """
+    Forward pass for the model with edge masking.
 
-def model_forward(model, edge_mask, device='cuda'):
+    Parameters:
+    - edge_mask (torch.Tensor): Mask for edges.
+    - data (torch_geometric.data.Data): Graph data.
+    - model (torch.nn.Module): GNN model.
+    - device (str): Device to run the model on ('cpu' or 'cuda').
+
+    Returns:
+    - torch.Tensor: Model output.
+    """
     batch = torch.zeros(data.x.shape[0], dtype=int).to(device)
     out = model(data.x, data.edge_index, batch, edge_mask)
     return out
 
+def explain(method, data, model, device, target=1):
+    """
+    Explain the model's predictions using the specified method.
 
-def explain(method, data, target=0,     device = 'cuda'):
+    Parameters:
+    - method (str): Explanation method ('ig' for Integrated Gradients, 'saliency' for Saliency).
+    - data (torch_geometric.data.Data): Graph data.
+    - model (torch.nn.Module): GNN model.
+    - device (str): Device to run the model on ('cpu' or 'cuda').
+    - target (int): Target class for explanation.
+
+    Returns:
+    - np.ndarray: Normalized edge mask.
+    """
     input_mask = torch.ones(data.edge_index.shape[1]).requires_grad_(True).to(device)
+    
+    # Define a forward function that accepts all inputs as positional arguments
+    def forward_func(edge_mask, data):
+        return model_forward(edge_mask, data, model, device)
+    
     if method == 'ig':
-        ig = IntegratedGradients(model_forward)
+        ig = IntegratedGradients(forward_func)
         mask = ig.attribute(input_mask, target=target,
                             additional_forward_args=(data,),
                             internal_batch_size=data.edge_index.shape[1])
     elif method == 'saliency':
-        saliency = Saliency(model_forward)
+        saliency = Saliency(forward_func)
         mask = saliency.attribute(input_mask, target=target,
-                                  additional_forward_args=(data,))
+                                   additional_forward_args=(data,))
     else:
         raise Exception('Unknown explanation method')
 
     edge_mask = np.abs(mask.cpu().detach().numpy())
-    if edge_mask.max() > 0:  # avoid division by zero
+    if edge_mask.max() > 0:  # Avoid division by zero
         edge_mask = edge_mask / edge_mask.max()
     return edge_mask
 
-
-def visualize_graph(G: nx.Graph, node_size=20, figsize=(12, 12), edge_cmap=plt.cm.inferno, use_edge_importance=True):
+def aggregate_edge_directions(edge_mask, data):
     """
-    Improved visualization for scientific publication clarity.
-    
+    Aggregate edge directions for undirected graphs.
+
+    Parameters:
+    - edge_mask (np.ndarray): Edge mask values.
+    - data (torch_geometric.data.Data): Graph data.
+
+    Returns:
+    - dict: Aggregated edge mask values.
+    """
+    edge_mask_dict = defaultdict(float)
+    for val, u, v in list(zip(edge_mask, *data.edge_index)):
+        u, v = u.item(), v.item()
+        if u > v:
+            u, v = v, u
+        edge_mask_dict[(u, v)] += val
+    return edge_mask_dict
+
+
+def visualize_graph(G: nx.Graph, node_size=20, figsize=(12, 12), edge_cmap=plt.cm.inferno, use_edge_importance=True, savename=None):
+    """    
     Parameters:
         G (nx.Graph): Graph to visualize.
         node_size (int): Size of the nodes.
@@ -381,5 +449,58 @@ def visualize_graph(G: nx.Graph, node_size=20, figsize=(12, 12), edge_cmap=plt.c
     )
 
     plt.axis("off")
+    plt.tight_layout()
+    if savename: 
+        plt.savefig(savename + '.tiff', format='tiff', bbox_inches="tight")
+    plt.show()
+
+import seaborn as sns
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def plot_top_important_edges_heatmap(G: nx.Graph, top_n=30, figsize=(10, 8), cmap="Reds"):
+    """
+    Visualize the top N most important edges as a heatmap-style plot.
+
+    Parameters:
+        G (nx.Graph): Graph containing edge 'importance' and node 'node_labels'.
+        top_n (int): Number of top edges to display.
+        figsize (tuple): Size of the figure.
+        cmap (str): Colormap to use.
+    """
+    # Extract edges with importance
+    edge_data = [
+        (u, v, G.nodes[u].get('node_labels', 'N/A'), G.nodes[v].get('node_labels', 'N/A'), G[u][v].get('importance', 0))
+        for u, v in G.edges
+    ]
+    edge_df = pd.DataFrame(edge_data, columns=["Source", "Target", "Source_Label", "Target_Label", "Importance"])
+
+    # Helper function to add 'ECM ' if label is numeric
+    def format_label(label):
+        try:
+            float(label)
+            return f"ECM {label}"
+        except ValueError:
+            return str(label)
+
+    # Sort and take top N
+    top_edges = edge_df.sort_values(by="Importance", ascending=False).head(top_n).reset_index(drop=True)
+
+    # Format labels for the heatmap row labels
+    top_edges["Edge_Label"] = top_edges.apply(
+        lambda row: f"{format_label(row['Source_Label'])} → {format_label(row['Target_Label'])}", axis=1
+    )
+
+    # Prepare heatmap data: single column heatmap
+    heatmap_data = pd.DataFrame({
+        "Importance": top_edges["Importance"].values
+    }, index=top_edges["Edge_Label"])
+
+    # Plot
+    plt.figure(figsize=figsize, dpi=300)
+    sns.heatmap(heatmap_data, annot=True, fmt=".2f", cmap=cmap, linewidths=0.5, cbar_kws={'label': 'Edge Importance'})
+    plt.title(f"Top {top_n} Most Important Edges", fontsize=14)
+    plt.xlabel("Importance", fontsize=12)
+    plt.ylabel("Edges", fontsize=12)
     plt.tight_layout()
     plt.show()
