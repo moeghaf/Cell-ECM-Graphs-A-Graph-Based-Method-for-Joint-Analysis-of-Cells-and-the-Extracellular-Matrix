@@ -176,7 +176,7 @@ def plot_losses(train_losses, val_losses, val_accuracies):
     plt.legend()
 
     plt.tight_layout()
-    plt.savefig("train_val_loss.tiff", bbox_inches="tight")
+    plt.savefig("train_val_loss.tiff", bbox_inches="tight", dpi=600)
     
     return 
 
@@ -413,7 +413,7 @@ def visualize_graph(G: nx.Graph, node_size=20, figsize=(12, 12), edge_cmap=plt.c
         al = 1 
 
     # Create figure
-    fig, ax = plt.subplots(figsize=figsize,dpi=300)
+    fig, ax = plt.subplots(figsize=figsize)
     
     # Draw edges
     nx.draw_networkx_edges(
@@ -451,14 +451,14 @@ def visualize_graph(G: nx.Graph, node_size=20, figsize=(12, 12), edge_cmap=plt.c
     plt.axis("off")
     plt.tight_layout()
     if savename: 
-        plt.savefig(savename + '.tiff', format='tiff', bbox_inches="tight")
+        plt.savefig(savename + '.tiff', format='tiff', bbox_inches="tight", dpi=600)
     plt.show()
 
 import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def plot_top_important_edges_heatmap(G: nx.Graph, top_n=30, figsize=(10, 8), cmap="Reds"):
+def plot_top_important_edges_heatmap(G: nx.Graph, top_n=30, figsize=(10, 8), cmap="Reds", savename=None):
     """
     Visualize the top N most important edges as a heatmap-style plot.
 
@@ -497,10 +497,13 @@ def plot_top_important_edges_heatmap(G: nx.Graph, top_n=30, figsize=(10, 8), cma
     }, index=top_edges["Edge_Label"])
 
     # Plot
-    plt.figure(figsize=figsize, dpi=300)
+    plt.figure(figsize=figsize)
     sns.heatmap(heatmap_data, annot=True, fmt=".2f", cmap=cmap, linewidths=0.5, cbar_kws={'label': 'Edge Importance'})
     plt.title(f"Top {top_n} Most Important Edges", fontsize=14)
     plt.xlabel("Importance", fontsize=12)
     plt.ylabel("Edges", fontsize=12)
     plt.tight_layout()
+    if savename: 
+        plt.savefig(savename + '.tiff', format='tiff', bbox_inches="tight", dpi=600)
+    plt.show()
     plt.show()
