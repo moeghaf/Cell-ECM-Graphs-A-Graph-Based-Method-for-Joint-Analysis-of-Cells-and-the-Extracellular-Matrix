@@ -241,7 +241,6 @@ class imc_ecm_data_generator:
         plt.tight_layout()
         plt.savefig(savename + '.pdf')
 
-
 def plot_cell_type_distribution(ceg):
     """
     Plot the distribution of cell types in the cell graph.
