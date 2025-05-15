@@ -109,7 +109,13 @@ import torch.nn.functional as F
 from sklearn.utils.class_weight import compute_class_weight
 import numpy as np
 import torch
-
+import torch
+import numpy as np
+from captum.attr import IntegratedGradients, Saliency
+from collections import defaultdict
+import seaborn as sns
+import pandas as pd
+import matplotlib.pyplot as plt
 
 def train(model, optimizer, train_loader, device, class_weights=None, edge_dropout_prob=0.2):
     """
@@ -148,7 +154,6 @@ def train(model, optimizer, train_loader, device, class_weights=None, edge_dropo
     
     return total_loss / len(train_loader)
 
-
 def evaluate(model, loader, device):
     model.eval()
     total_loss = 0
@@ -161,7 +166,6 @@ def evaluate(model, loader, device):
         pred = out.argmax(dim=1)
         correct += (pred == data.y).sum().item()
     return total_loss / len(loader.dataset), correct / len(loader.dataset)  # Return both loss and accuracy
-
 
 # Plot the training and validation losses
 def plot_losses(train_losses, val_losses, val_accuracies):
@@ -303,10 +307,7 @@ def pyg_to_networkx(data: Data) -> nx.Graph:
             G.add_edge(src, dst)
 
     return G
-import torch
-import numpy as np
-from captum.attr import IntegratedGradients, Saliency
-from collections import defaultdict
+
 
 def model_forward(edge_mask, data, model, device):
     """
@@ -454,9 +455,7 @@ def visualize_graph(G: nx.Graph, node_size=20, figsize=(12, 12), edge_cmap=plt.c
         plt.savefig(savename + '.tiff', format='tiff', bbox_inches="tight", dpi=600)
     plt.show()
 
-import seaborn as sns
-import pandas as pd
-import matplotlib.pyplot as plt
+
 
 def plot_top_important_edges_heatmap(G: nx.Graph, top_n=30, figsize=(10, 8), cmap="Reds", savename=None):
     """
