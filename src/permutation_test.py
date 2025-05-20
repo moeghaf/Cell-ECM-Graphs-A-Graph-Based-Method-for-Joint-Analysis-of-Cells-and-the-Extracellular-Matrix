@@ -27,6 +27,11 @@ from collections import defaultdict
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
+import numpy as np
+import pandas as pd
+from collections import defaultdict
+from joblib import Parallel, delayed
+from tqdm import tqdm
 
 def graph_to_df(cmg): 
     '''
@@ -72,17 +77,17 @@ def graph_to_df(cmg):
 
     return df
 
-
 def test_interactions_from_neighbor_labels(
     df,
     group_by="all",
     label_col="labels",
     neighbor_col="neighbor_labels",
     iter=1000,
-    p_threshold=0.01,
+    p_threshold=0.05,
     return_samples=False,
     tolerance=1e-8,
-    n_jobs=1,):
+    n_jobs=1,
+):
     df = df.copy()
     df[label_col] = df[label_col].astype(str)
     
@@ -170,33 +175,11 @@ def _calc_p_vals(observed, permutations, n_perm, p_thres, return_samples, tolera
 
     return (merged, permutations_df) if return_samples else merged
 
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
 
-def test_interactions(cmg):
-    df = graph_to_df(cmg)
-
-    df['neighbor_labels'] = df['neighbor_labels'].apply(
-        lambda neighbors: [label for label in neighbors]
-    )
-
-    result = test_interactions_from_neighbor_labels(
-    df,
-    label_col="labels",
-    neighbor_col="neighbor_labels",
-    iter=1000,
-    n_jobs=4)
-
-    result = result.rename(columns={'ct': 'classic edge counts'})
-    result = result.rename(columns={'sigval': 'SigVal'})
-    result = result.replace('ecm_1', 'ECM 1').replace('ecm_2', 'ECM 2').replace('ecm_3', 'ECM 3')
-    return result
-
-
-def plot_interaction_heatmap(result_df, value_col='ct', sig_col='sigval', cmap='bwr', figsize=(12, 10), annot=True,
-                             savename=None):
-    # Set publication style for fonts
-    sns.set_context("notebook", font_scale=1.5)  # Make fonts bigger overall
-    sns.set_style("ticks")  # A clean background for publications
-
+def plot_interaction_heatmap(result_df, value_col='ct', sig_col='sigval', cmap='bwr', figsize=(10, 8), annot=False):
     # Pivot the result to a matrix form for heatmap
     heatmap_data = result_df.pivot_table(
         index='from_label',
@@ -205,8 +188,7 @@ def plot_interaction_heatmap(result_df, value_col='ct', sig_col='sigval', cmap='
         aggfunc='mean'
     )
 
-    # Create the figure and axis for the plot
-    plt.figure(figsize=figsize, dpi=300)
+    plt.figure(figsize=figsize)
     ax = sns.heatmap(
         heatmap_data,
         cmap=cmap,
@@ -215,47 +197,11 @@ def plot_interaction_heatmap(result_df, value_col='ct', sig_col='sigval', cmap='
         linewidths=0.5,
         linecolor='gray',
         cbar_kws={"label": value_col},
-        mask=heatmap_data.isna(),
-        square=True,  # Keep the aspect ratio square
-        vmin=heatmap_data.min().min(),  # Ensure color range is from min to max
-        vmax=heatmap_data.max().max()   # Same for max value
+        mask=heatmap_data.isna()
     )
 
-    # Title and axis labels with larger font size for clarity
-    plt.title("Interaction Strength Heatmap", fontsize=22, weight='bold', pad=20)
-    plt.xlabel("Extracellular Matrix Clusters", fontsize=20, labelpad=15)
-    plt.ylabel("Extracellular Matrix Clusters", fontsize=20, labelpad=15)
-
-    # Customizing tick labels
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', fontsize=16)
-    ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=16)
-
-    # Increase colorbar (legend) font size
-    cbar = ax.collections[0].colorbar
-    cbar.ax.tick_params(labelsize=16)
-    cbar.set_label(value_col, fontsize=18)
-
-    # Adjust layout and make sure everything fits nicely
+    plt.title("Interaction Strength Heatmap")
+    plt.xlabel("To Label")
+    plt.ylabel("From Label")
     plt.tight_layout()
-
-    # Show the plot
-    #plt.savefig(savename+'.pdf')
     plt.show()
-    return heatmap_data
-
-def split_results(results):
-    '''
-    Split results into cell-cell, ecm-ecm and cell-ecm interactions 
-
-    results - output of Interaction tests
-    returns - cell_results, ecm_results, cell_ecm_results
-    '''
-    ecm_results_from = results[results['from_label'].str.contains('ECM')]
-    ecm_results = ecm_results_from[ecm_results_from['to_label'].str.contains('ECM')]
-
-    cell_results_from = results[~results['from_label'].str.contains('ECM')]
-    cell_results = cell_results_from[~cell_results_from['to_label'].str.contains('ECM')]
-
-    cell_results_from = results[~results['from_label'].str.contains('ECM')]
-    cell_ecm_results = cell_results_from[cell_results_from['to_label'].str.contains('ECM')]
-    return cell_results, ecm_results, cell_ecm_results
