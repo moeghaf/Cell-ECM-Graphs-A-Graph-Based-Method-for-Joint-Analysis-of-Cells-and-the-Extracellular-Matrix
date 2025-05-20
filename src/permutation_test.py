@@ -1,28 +1,37 @@
-'''
-Helper functions to perform permutation test on cell-ECM graphs 
 
-'''
+########################################################################
 
-import pandas as pd 
-import numpy as np 
-import seaborn as sns 
+# Code to perform permutation test
+# Python version of imcRtools TestInteractions
+# Reference: https://github.com/BodenmillerGroup/imcRtools/blob/devel/man/testInteractions.Rd 
+
+########################################################################
+
+
+
+import sys
+import os
 import matplotlib.pyplot as plt 
-
-def select_rows_with_ecm_and_columns_without_ecm(df):
-    filtered_rows = df[df.index.str.contains('ecm', case=False, na=False)]
-    filtered_columns = filtered_rows.loc[:, ~filtered_rows.columns.str.contains('ecm', case=False)]
-    return filtered_columns
-def select_rows_without_ecm_and_columns_with_ecm(df):
-    """
-    Selects all rows where the index does not contain 'ecm' 
-    and all columns that contain 'ecm' in their name.
-    """
-    filtered_rows = df[~df.index.str.contains('ecm', case=False, na=False)]
-    filtered_columns = filtered_rows.loc[:, filtered_rows.columns.str.contains('ecm', case=False)]
-    return filtered_columns
+from Graph_builder import *
+from SimData_Generator import *
+from glob import glob
+from CellECMGraphs_multiple import *
+from tqdm import tqdm 
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
+import ast
+import numpy as np
+import pandas as pd
+from collections import defaultdict
+from joblib import Parallel, delayed
+from tqdm import tqdm
 
 
 def graph_to_df(cmg): 
+    '''
+    Converts G to DF
+    '''
     node_id = []
     unique_id = []
     cell_or_ecm = []
@@ -63,182 +72,190 @@ def graph_to_df(cmg):
 
     return df
 
-def count_interactions_from_df(df):
+
+def test_interactions_from_neighbor_labels(
+    df,
+    group_by="all",
+    label_col="labels",
+    neighbor_col="neighbor_labels",
+    iter=1000,
+    p_threshold=0.01,
+    return_samples=False,
+    tolerance=1e-8,
+    n_jobs=1,):
+    df = df.copy()
+    df[label_col] = df[label_col].astype(str)
     
-    # Create df to store counts 
-    unique_labels = np.sort(df['labels'].unique())
-    interaction_counts = np.zeros((len(unique_labels), len(unique_labels)))
-    interaction_counts_df = pd.DataFrame((interaction_counts), index= unique_labels, columns=unique_labels)
-
-    for l, n in zip(df['labels'], df['neighbor_labels']):
-        for j in n:
-            if j in list(interaction_counts_df.columns):
-                interaction_counts_df.loc[l,j] += 1 
-    return interaction_counts_df
-
-def permute_labels_in_df(df):
-    permuted_df = df.copy()
-    permuted_df['labels'] = permuted_df['labels'].sample(frac=1).reset_index(drop=True)
-    return permuted_df 
-
-def classic_interaction_count(cmg, original_matrix, cell_or_ecm): 
-    '''
-    The count is divided by the total number of cells of type A . 
-    '''
-    
-    # Get cell counts from graph 
-    if cell_or_ecm == 'cell': 
-        unique_ct, uni_ct_counts = np.unique(cmg.cell_y_str,return_counts=True)
-    if cell_or_ecm == 'ecm':
-        labels = []
-        for n,attri in cmg.G.nodes(data=True):
-            if 'ecm' in n:
-                labels.append('ECM ' + str(attri['ecm_labels']))
-        unique_ct, uni_ct_counts = np.unique(labels,return_counts=True)
-    if cell_or_ecm == 'both':
-        unique_ct, uni_ct_counts = np.unique(cmg.cell_y_str,return_counts=True)
-        
-    ct_counts = pd.DataFrame((uni_ct_counts), index=unique_ct)
-    
-    classic_matrix = original_matrix.copy()
-    # divided each row by cell type A count 
-    for i in unique_ct:
-        classic_matrix.loc[i, :]= classic_matrix.loc[i, :] / ct_counts.loc[i].values[0]
-    
-    return classic_matrix 
-
-# Shuffle function
-#def shuffle_group(group):
-#    shuffled_group = np.random.permutation(group.values)
-#    return shuffled_group
-
-#def permute_cell_ecm_labels_in_df(df):
-#    # Shuffle labels based on 'cell_or_ecm' groups
-#    shuffled_labels = df.groupby('cell_or_ecm')['labels'].apply(shuffle_group).reset_index(drop=True)
-#    df['labels'] = shuffled_labels
-#    return df
-
-def shuffle_group(group):
-    shuffled_group = group.copy()
-    np.random.shuffle(shuffled_group.values)
-    return shuffled_group
-
-def permute_cell_ecm_labels_in_df(df):
-    # Shuffle labels based on 'cell_or_ecm' groups
-    shuffled_labels = df.groupby('cell_or_ecm')['labels'].apply(shuffle_group).reset_index(drop=True)
-    # Add shuffled labels back to the DataFrame
-    df['labels'] = shuffled_labels
-    return df 
-
-def permutation_test(cmg, cell_or_ecm, iter):
-    df = graph_to_df(cmg)
-    if cell_or_ecm != 'both': 
-                    cell_df = df[df['cell_or_ecm'] == cell_or_ecm].reset_index(drop=True)
-                    count_interactions = count_interactions_from_df(cell_df)
-
+    # If group_by is "all", set a single group label for all rows
+    if group_by == "all":
+        df["__group__"] = "all"
+        group_by = "__group__"
     else:
-        cell_df = df 
-        count_interactions = count_interactions_from_df(cell_df)
-        count_interactions= select_rows_without_ecm_and_columns_with_ecm(count_interactions)
+        df[group_by] = df[group_by].astype(str)
 
-    if cell_or_ecm == 'ecm': 
-        rename_map ={f'ecm_{i}': f'ECM {i}' for i in range(cmg.ecm_KNN)}
-        old_names = list(count_interactions.columns)
-        new_names = [rename_map[i] for i in old_names]
+    observed = count_interactions_from_neighbors(df, group_by, label_col, neighbor_col)
 
-        count_interactions.columns = new_names
-        count_interactions.index = new_names
+    all_permuted = Parallel(n_jobs=n_jobs)(
+        delayed(_permute_and_count_from_neighbors)(df, group_by, label_col, neighbor_col)
+        for _ in tqdm(range(iter), desc="Permutations")
+    )
 
-    ct = classic_interaction_count(cmg, count_interactions, cell_or_ecm=cell_or_ecm)
-    pertubations = []
-    print(iter)
-
-    for _ in range(iter): 
-        if cell_or_ecm != 'both': 
-            permuted_cell_df = permute_labels_in_df(cell_df)
-            count_interactions = count_interactions_from_df(permuted_cell_df)
-        else: 
-            permuted_cell_df = permute_cell_ecm_labels_in_df(cell_df)
-            count_interactions = count_interactions_from_df(permuted_cell_df)
-            count_interactions = select_rows_without_ecm_and_columns_with_ecm(count_interactions)
-
-        if cell_or_ecm == 'ecm': 
-            rename_map ={f'ecm_{i}': f'ECM {i}' for i in range(cmg.ecm_KNN)}
+    result = _calc_p_vals(observed, all_permuted, iter, p_threshold, return_samples, tolerance)
+    return result
 
 
-            old_names = list(count_interactions.columns)
-            new_names = [rename_map[i] for i in old_names]
+def count_interactions_from_neighbors(df, group_by, label_col, neighbor_col):
+    interaction_counts = []
+    all_labels = df[label_col].unique()
 
-            count_interactions.columns = new_names
-            count_interactions.index = new_names
-        permuted_ct = classic_interaction_count( cmg, count_interactions, cell_or_ecm)
-        pertubations.append(np.array(permuted_ct))
+    for group in df[group_by].unique():
+        df_group = df[df[group_by] == group]
+        all_pairs = [(a, b) for a in all_labels for b in all_labels]
 
-    pertubations = np.array(pertubations)
+        counts = defaultdict(int)
+        for idx, row in df_group.iterrows():
+            source_label = row[label_col]
+            for neighbor_label in row[neighbor_col]:
+                counts[(source_label, neighbor_label)] += 1
 
-    sigval_matrix = np.zeros_like(ct)
-    print(pertubations.shape)
-    n, r,c = pertubations.shape
-    p_thresh = 0.05
+        for a, b in all_pairs:
+            from_count = (df_group[label_col] == a).sum()
+            count = counts.get((a, b), 0)
+            norm_ct = count / from_count if from_count > 0 else np.nan
+            interaction_counts.append({
+                'group_by': group,
+                'from_label': a,
+                'to_label': b,
+                'ct': norm_ct
+            })
 
-    for i in range(r):
-        for j in range(c): 
-
-            observed = ct.iloc[i, j]
-            permuted = pertubations[:, i, j]
-
-            p_gt = np.mean(permuted >= observed)
-            p_lt = np.mean(permuted <= observed)
-
-            interaction = p_lt > p_gt
-            p = min(p_gt, p_lt)
-            print('p over o', permuted >=observed)
-            print('permuted:', permuted)
-            print('observed:', observed)
-
-            print('interaction:', interaction)
-
-            print('p_lt', p_lt)    
-            print('p_gt', p_gt)    
-            print('p_val: ', p)
-
-            sig = p < p_thresh
-            print('sig', sig)
-
-                        
-            if (interaction == False) & (sig == True): 
-                sigval = -1 
-                print('sigval:', sigval)
-            elif (interaction == True) & (sig == True): 
-                sigval = 1
-                print('sigval:', sigval)
-            else:
-                sigval= 0
-                print('sigval:', sigval)
+    return pd.DataFrame(interaction_counts)
 
 
-            
-            sigval_matrix[i,j] = sigval
+def _permute_and_count_from_neighbors(df, group_by, label_col, neighbor_col):
+    df = df.copy()
+    df[label_col] = df.groupby(group_by)[label_col].transform(lambda x: np.random.permutation(x.values))
+    return count_interactions_from_neighbors(df, group_by, label_col, neighbor_col)
 
-    if cell_or_ecm != 'both':
-        names = ct.columns
-        sigval_matrix = pd.DataFrame((sigval_matrix), columns=names, index=names)
-    else: 
-        col_names = permuted_ct.columns
-        row_names = permuted_ct.index
-        rename_map ={f'ecm_{i}': f'ECM {i}' for i in range(cmg.ecm_KNN)}
-        old_names = list(col_names)
-        new_names = [rename_map[i] for i in old_names]
-        sigval_matrix = pd.DataFrame((sigval_matrix), columns=new_names, index=row_names)
 
-    plt.figure(figsize=(10, 8),dpi=300)
-    sns.heatmap(sigval_matrix,cbar_kws={'ticks': [-1, 0, 1]}, cmap='bwr')
-    if cell_or_ecm == 'cell': 
-        plt.title('Significant Cell-Cell Interactions ')
-    if cell_or_ecm == 'ecm': 
-        plt.title('Significant ECM-ECM Interactions ')
-    if cell_or_ecm == 'both': 
-        plt.title('Significant Cell-ECM Interactions ')
+def _calc_p_vals(observed, permutations, n_perm, p_thres, return_samples, tolerance):
+    permutations_df = pd.concat(permutations)
+    merged = observed.copy()
+    merged['p_gt'] = 0
+    merged['p_lt'] = 0
 
+    for i, row in observed.iterrows():
+        group = row['group_by']
+        a = row['from_label']
+        b = row['to_label']
+        ct = row['ct']
+        sub = permutations_df[
+            (permutations_df['group_by'] == group) &
+            (permutations_df['from_label'] == a) &
+            (permutations_df['to_label'] == b)
+        ]
+        perm_vals = sub['ct'].values
+        p_gt = np.mean(perm_vals >= ct - tolerance)
+        p_lt = np.mean(perm_vals <= ct + tolerance)
+        merged.loc[i, 'p_gt'] = p_gt
+        merged.loc[i, 'p_lt'] = p_lt
+        merged.loc[i, 'p'] = min(p_gt, p_lt)
+        interaction = p_lt > p_gt
+        merged.loc[i, 'interaction'] = interaction
+        sig = merged.loc[i, 'p'] < p_thres
+        merged.loc[i, 'sig'] = sig
+        merged.loc[i, 'sigval'] = (
+            1 if interaction and sig else -1 if not interaction and sig else 0
+        )
+
+    return (merged, permutations_df) if return_samples else merged
+
+
+def test_interactions(cmg):
+    df = graph_to_df(cmg)
+
+    df['neighbor_labels'] = df['neighbor_labels'].apply(
+        lambda neighbors: [label for label in neighbors]
+    )
+
+    result = test_interactions_from_neighbor_labels(
+    df,
+    label_col="labels",
+    neighbor_col="neighbor_labels",
+    iter=1000,
+    n_jobs=4)
+
+    result = result.rename(columns={'ct': 'classic edge counts'})
+    result = result.rename(columns={'sigval': 'SigVal'})
+    result = result.replace('ecm_1', 'ECM 1').replace('ecm_2', 'ECM 2').replace('ecm_3', 'ECM 3')
+    return result
+
+
+def plot_interaction_heatmap(result_df, value_col='ct', sig_col='sigval', cmap='bwr', figsize=(12, 10), annot=True,
+                             savename=None):
+    # Set publication style for fonts
+    sns.set_context("notebook", font_scale=1.5)  # Make fonts bigger overall
+    sns.set_style("ticks")  # A clean background for publications
+
+    # Pivot the result to a matrix form for heatmap
+    heatmap_data = result_df.pivot_table(
+        index='from_label',
+        columns='to_label',
+        values=value_col,
+        aggfunc='mean'
+    )
+
+    # Create the figure and axis for the plot
+    plt.figure(figsize=figsize, dpi=300)
+    ax = sns.heatmap(
+        heatmap_data,
+        cmap=cmap,
+        annot=annot,
+        fmt=".2f",
+        linewidths=0.5,
+        linecolor='gray',
+        cbar_kws={"label": value_col},
+        mask=heatmap_data.isna(),
+        square=True,  # Keep the aspect ratio square
+        vmin=heatmap_data.min().min(),  # Ensure color range is from min to max
+        vmax=heatmap_data.max().max()   # Same for max value
+    )
+
+    # Title and axis labels with larger font size for clarity
+    plt.title("Interaction Strength Heatmap", fontsize=22, weight='bold', pad=20)
+    plt.xlabel("Extracellular Matrix Clusters", fontsize=20, labelpad=15)
+    plt.ylabel("Extracellular Matrix Clusters", fontsize=20, labelpad=15)
+
+    # Customizing tick labels
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', fontsize=16)
+    ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=16)
+
+    # Increase colorbar (legend) font size
+    cbar = ax.collections[0].colorbar
+    cbar.ax.tick_params(labelsize=16)
+    cbar.set_label(value_col, fontsize=18)
+
+    # Adjust layout and make sure everything fits nicely
+    plt.tight_layout()
+
+    # Show the plot
+    #plt.savefig(savename+'.pdf')
     plt.show()
+    return heatmap_data
 
+def split_results(results):
+    '''
+    Split results into cell-cell, ecm-ecm and cell-ecm interactions 
+
+    results - output of Interaction tests
+    returns - cell_results, ecm_results, cell_ecm_results
+    '''
+    ecm_results_from = results[results['from_label'].str.contains('ECM')]
+    ecm_results = ecm_results_from[ecm_results_from['to_label'].str.contains('ECM')]
+
+    cell_results_from = results[~results['from_label'].str.contains('ECM')]
+    cell_results = cell_results_from[~cell_results_from['to_label'].str.contains('ECM')]
+
+    cell_results_from = results[~results['from_label'].str.contains('ECM')]
+    cell_ecm_results = cell_results_from[cell_results_from['to_label'].str.contains('ECM')]
+    return cell_results, ecm_results, cell_ecm_results
