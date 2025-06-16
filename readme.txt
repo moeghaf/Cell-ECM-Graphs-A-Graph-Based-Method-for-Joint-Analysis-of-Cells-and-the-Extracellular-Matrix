@@ -1,5 +1,5 @@
 
-🧬 CEG: Cell–ECM Graph Analysis
+# 🧬 CEG: Cell–ECM Graph Analysis
 
 This repository provides code and notebooks for constructing, analyzing, and visualizing Cell–ECM Graphs (CEGs) — focusing on cell–extracellular matrix (ECM) interactions in biological datasets.
 
