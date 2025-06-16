@@ -1,13 +1,12 @@
 
-# Test header 
 
 # 🧬 CEG: Cell–ECM Graph Analysis
 
-This repository provides code and notebooks for constructing, analyzing, and visualizing Cell–ECM Graphs (CEGs) — focusing on cell–extracellular matrix (ECM) interactions in biological datasets.
+This repository provides code and notebooks for constructing, analyzing, and visualizing Cell–ECM Graphs (CEGs) — focusing on cell–extracellular matrix (ECM) interactions in spatial proteomic datasets.
 
 --------------------------------------------------------------------------------
 
-📚 Overview
+## 📚 Overview
 
 This project includes tools for:
 
@@ -18,69 +17,35 @@ This project includes tools for:
 
 --------------------------------------------------------------------------------
 
-📁 Repository Structure
+## 📁 Repository Structure
 
 Folder/File                  | Description
 --------------------------- | ------------------------------------------------------------
 main_figures/               | Reproduce primary figures and results for the publication.
 Notebooks/supplementary/    | Additional analyses, exploratory plots, and extended context.
-data/                       | Place raw data and metadata here.
-scripts/ (if applicable)    | Scripts used across multiple notebooks.
+src/                        | Main code is here.
 
 --------------------------------------------------------------------------------
 
-🚀 How to Use
+## 🚀 How to Use
 
-1. Install Dependencies
-
-Make sure you have Python installed. Then install all required packages:
-
-    pip install -r requirements.txt
-
-Alternatively, refer to environment instructions provided in individual notebooks if needed.
-
-2. Prepare Data
-
-Place your raw data and metadata inside the data/ directory.  
-Update the data paths in the notebooks if your folder structure is different.
-
-3. Run Notebooks
-
-Open any notebook in:
-
-- main_figures/ to reproduce key results and publication-quality plots  
-- Notebooks/supplementary/ for additional context and extended analyses
-
-📌 Tip: Run all cells sequentially for accurate outputs.
+Package for clear tutorial to be added 
 
 --------------------------------------------------------------------------------
 
-🧩 Key Modules
-
-Module                       | Description
---------------------------- | ------------------------------------------------------------
-Graph_builder.py            | Constructs cell–ECM graphs from spatial and molecular data.
-Permutation_test.py         | Performs permutation-based statistical testing of interaction frequencies.
-CellECMGraphs_multiple.py   | Classes/utilities for managing multiple CEGs.
-Helper_functions.py         | Utilities for data processing and visualization.
-SimData_Generator.py        | Tools for generating synthetic cell–ECM interaction datasets.
-
---------------------------------------------------------------------------------
-
-📄 Citation
+## 📄 Citation
 
 If you use this repository in your work, please cite:
 
-[Your Paper Title]  
-Journal/Preprint, Year
-
+[Cell–ECM Graphs: A Graph-Based Method
+for Joint Analysis of Cells and the
+Extracellular Matrix]  https://www.biorxiv.org/content/10.1101/2025.06.04.657781v1.full.pdf
 --------------------------------------------------------------------------------
 
-📬 Contact
+## 📬 Contact
 
 For questions, issues, or contributions:
 
-- Open an Issue: https://github.com/your-repo/issues
-- Contact: [your-email@example.com]
+- Contact: mohamed.ghafoor@postgrad.manchester.ac.uk
 
-© [Year] Your Name / Lab. All rights reserved.
+© [2025] Mohamed Ghafoor / UoM Bioinference 
