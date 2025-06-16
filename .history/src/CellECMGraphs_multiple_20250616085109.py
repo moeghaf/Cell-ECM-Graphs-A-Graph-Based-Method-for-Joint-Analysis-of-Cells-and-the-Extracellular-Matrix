@@ -242,3 +242,191 @@ class Cell_ECM_Graphs(GraphBuilder):
         fig.savefig(self.save_folder+'/joint_cluster_protein_exp.png', bbox_inches='tight')
         plt.show()
         plt.close(fig)
+
+    def test_interactions(self, cell_or_ecm,conditions):
+        
+        count_interactions_dict = {}
+        classic_interactions_dict = {}
+        sigval_dict = {}
+
+        for k in self.ceg_dict:
+            df = graph_to_df( self.ceg_dict[k])
+            if cell_or_ecm != 'cell_ecm': 
+                cell_df = df[df['cell_or_ecm'] == cell_or_ecm].reset_index(drop=True)
+                count_interactions = count_interactions_from_df(cell_df)
+
+            else:
+                cell_df = df 
+                count_interactions = count_interactions_from_df(cell_df)
+                count_interactions= count_interactions.iloc[:-3,-3:]
+
+            if cell_or_ecm == 'ecm': 
+                rename_map = {'ecm_0': 'ECM 0',
+                'ecm_1': 'ECM 1',
+                'ecm_2': 'ECM 2',
+                'ecm_3' :'ECM 3'}
+
+                old_names = list(count_interactions.columns)
+                new_names = [rename_map[i] for i in old_names]
+
+                count_interactions.columns = new_names
+                count_interactions.index = new_names
+
+            count_interactions_dict[k] = count_interactions
+            ct = classic_interaction_count( self.ceg_dict[k], count_interactions, cell_or_ecm=cell_or_ecm)
+            classic_interactions_dict[k] = ct 
+            pertubations = []
+
+            for _ in range(1000): 
+                if cell_or_ecm != 'both': 
+                    permuted_cell_df = permute_labels_in_df(cell_df)
+                    count_interactions = count_interactions_from_df(permuted_cell_df)
+                else: 
+                    permuted_cell_df = permute_cell_ecm_labels_in_df(cell_df)
+                    count_interactions = count_interactions_from_df(permuted_cell_df)
+                    count_interactions = count_interactions.iloc[:-3,-3:]
+
+
+                if cell_or_ecm == 'ecm': 
+                    rename_map = {'ecm_0': 'ECM 0',
+                    'ecm_1': 'ECM 1',
+                    'ecm_2': 'ECM 2',
+                    'ecm_3' :'ECM 3'}
+
+                    old_names = list(count_interactions.columns)
+                    new_names = [rename_map[i] for i in old_names]
+
+                    count_interactions.columns = new_names
+                    count_interactions.index = new_names
+                permuted_ct = classic_interaction_count( self.ceg_dict[k], count_interactions, cell_or_ecm)
+
+                pertubations.append(permuted_ct)
+                
+            pertubations = np.array(pertubations)
+
+
+            sigval_matrix = np.zeros_like(ct)
+            n_pertubations,r,c = pertubations.shape
+            p_thresh = 0.01
+
+            for i in range(r):
+                for j in range(c): 
+
+
+                    p_gt = np.mean(pertubations[:,i,j] > ct.iloc[i,j]) / (n_pertubations+1)
+                    p_lt = np.mean(pertubations[:,i,j] < ct.iloc[i,j]) / (n_pertubations+1)
+
+                    interaction = p_lt > p_gt
+
+                    if p_gt < p_lt:
+                        p = p_gt 
+                    else:
+                        p = p_lt 
+                        
+                    sig = p < p_thresh
+
+                    if interaction == False and sig == True: 
+                        sigval = -1 
+                    if sig == False: 
+                        sigval = 0 
+                    if interaction == True and sig == True:
+                        sigval= 1
+                    
+                    sigval_matrix[i,j] = sigval
+            if cell_or_ecm != 'cell_ecm':
+                names = ct.columns
+                sigval_matrix = pd.DataFrame((sigval_matrix), columns=names, index=names)
+            else: 
+                col_names = permuted_ct.columns
+                row_names = permuted_ct.index
+                rename_map = {'ecm_0': 'ECM 0',
+                    'ecm_1': 'ECM 1',
+                    'ecm_2': 'ECM 2',
+                    'ecm_3' :'ECM 3'}
+
+                old_names = list(col_names)
+                new_names = [rename_map[i] for i in old_names]
+                sigval_matrix = pd.DataFrame((sigval_matrix), columns=new_names, index=row_names)
+                plt.figure(figsize=(10, 8))
+                sns.heatmap(sigval_matrix, cmap='bwr')
+                plt.show()
+            sigval_dict[k] = sigval_matrix   
+
+        sigval_keys = np.array(list(sigval_dict.keys()))
+
+        df1  = sigval_dict[sigval_keys[conditions == 'PBS'][0]]
+        count = 0 
+        for i in sigval_keys[conditions == 'PBS'][1:]:
+            df2 = sigval_dict[i]
+            
+
+            if count == 0 : 
+                common_index = df1.index.union(df2.index)
+                common_columns = df1.columns.union(df2.columns)
+                df1_filled = df1.reindex(index=common_index, columns=common_columns, fill_value=0)
+                df2_filled = df2.reindex(index=common_index, columns=common_columns, fill_value=0)
+                result = df1_filled.copy()
+                result+= df2_filled 
+                count+=1 
+            else: 
+                common_index = result.index.union(df2.index)
+                common_columns = result.columns.union(df2.columns)
+                df2_filled = df2.reindex(index=common_index, columns=common_columns, fill_value=0)
+                result+=df2_filled
+                
+            
+        # Ensure the directory exists
+        os.makedirs('permutation_test_results', exist_ok=True)
+        # Increase Seaborn font scale
+        sns.set(font_scale=2)  
+        plt.figure(figsize=(14, 12), dpi=600)
+        # Define colorbar ticks (min, max, and zero)
+        #vmin, vmax = result.min().min(), result.max().max()
+        #cbar_ticks = [vmin, 0, vmax]
+        #sns.heatmap(result, cmap='bwr', cbar_kws={"ticks": cbar_ticks, "labelsize": 18})
+        sns.heatmap(result, cmap='bwr')
+
+
+        # Increase title font size
+        if cell_or_ecm == 'cell': 
+            plt.title('Significant PBS Cell-Cell Interactions', fontsize=24)
+        elif cell_or_ecm == 'ecm': 
+            plt.title('Significant PBS ECM-ECM Interactions', fontsize=24)
+        elif cell_or_ecm == 'both': 
+            plt.title('Significant PBS Cell-ECM Interactions', fontsize=24)
+        # Save and show the plot
+        plt.savefig(f'permutation_test_results/significant_PBS_interactions_{cell_or_ecm}.png', bbox_inches='tight')
+        plt.show()
+
+        df1  = sigval_dict[sigval_keys[conditions != 'PBS'][0]]
+        count = 0 
+        for i in sigval_keys[conditions != 'PBS'][1:]:
+            df2 = sigval_dict[i]
+            
+
+            if count == 0 : 
+                common_index = df1.index.union(df2.index)
+                common_columns = df1.columns.union(df2.columns)
+                df1_filled = df1.reindex(index=common_index, columns=common_columns, fill_value=0)
+                df2_filled = df2.reindex(index=common_index, columns=common_columns, fill_value=0)
+                result = df1_filled.copy()
+                result+= df2_filled 
+                count+=1 
+            else: 
+                common_index = result.index.union(df2.index)
+                common_columns = result.columns.union(df2.columns)
+                df2_filled = df2.reindex(index=common_index, columns=common_columns, fill_value=0)
+                result+=df2_filled
+        
+
+        plt.figure(figsize=(14, 12),dpi=600)
+        sns.heatmap(result, cmap='bwr')
+        if cell_or_ecm == 'cell': 
+            plt.title('Significant DRA Cell-Cell Interactions ')
+        if cell_or_ecm == 'ecm': 
+            plt.title('Significant DRA ECM-ECM Interactions ')
+        if cell_or_ecm == 'both': 
+            plt.title('Significant DRA Cell-ECM Interactions ')
+        plt.savefig(f'permutation_test_results/significant_DRA_interactions_{cell_or_ecm}.png', bbox_inches='tight')
+
+        plt.show()
