@@ -1,26 +1,32 @@
-CEG: Cell-ECM Graph Analysis
-This repository provides code and notebooks for building, analyzing, and visualizing Cell-ECM Graphs (CEGs) — focusing on cell–extracellular matrix (ECM) interactions in biological datasets.
+# 🧬 CEG: Cell–ECM Graph Analysis
 
-The project includes:
+This repository provides code and notebooks for constructing, analyzing, and visualizing **Cell–ECM Graphs (CEGs)** — focusing on cell–extracellular matrix (ECM) interactions in biological datasets.
 
-Graph construction
+---
 
-Permutation testing
+## 📚 Overview
 
-Explainable graph neural network (GNN) models
+This project includes tools for:
 
-Publication-ready figure generation
+- 📊 **Graph construction** from spatial and molecular data  
+- 🔁 **Permutation testing** for statistical analysis  
+- 🧠 **Explainable Graph Neural Network (GNN) models**  
+- 🖼️ **Publication-ready figure generation**  
 
-📁 Repository Structure
-Main Notebooks
-Reproduce primary figures and results for the publication.
+---
 
-Supplementary Notebooks
-Include additional analyses, exploratory plots, and context beyond main results.
+## 📁 Repository Structure
 
-🚀 How to Use
-1. Install Dependencies
-Make sure to install the required Python packages. You can use:
+| Folder/File                | Description                                                         |
+|---------------------------|---------------------------------------------------------------------|
+| `main_figures/`           | Reproduce primary figures and results for the publication.          |
+| `Notebooks/supplementary/`| Additional analyses, exploratory plots, and extended context.       |
+| `data/`                   | Place raw data and metadata here.                                   |
+| `scripts/` (if applicable)| Scripts used across multiple notebooks.                             |
+
+---
+
+## 🚀 How to Use
 
 bash
 Copy
